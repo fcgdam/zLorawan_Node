@@ -3,10 +3,15 @@
  *
  * Copyright (c) 2020 Manivannan Sadhasivam <mani@kernel.org>
  *
+ * Modified by Primal Cortex -> https://primalcortex.wordpress.com/2020/11/17/a-zephyr-rtos-based-ttn-lorawan-node/
+ *            - Enabled OTAA
+ *            - Enabled ADR
+ *            - Enable packet send after duty cycle restrition
+ *
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define   OTAA
+#define   OTAA              // Enables OTAA. Comment out and enable line below for ABP.
 //#define ABP
 
 #include <lorawan/lorawan.h>
@@ -135,7 +140,7 @@ void main(void)
 
     // Give time connect to USB.
     k_msleep(2500);
-    mainled_rate = 500;
+    mainled_rate = 500;         // Change led blinking rate to signal main program start.
 
     printk("Starting up Lora node...\n\n");
 
@@ -151,6 +156,9 @@ void main(void)
 		printk("lorawan_start failed: %d\n\n", ret);
 		return;
 	}
+
+    // Enable ADR
+    lorawan_enable_adr( true );
 
 #ifdef OTAA
 	join_cfg.mode = LORAWAN_CLASS_A;
@@ -170,7 +178,7 @@ void main(void)
 #endif
 
 
-	printk("Joining TTN  network over ");
+	printk("Joining TTN network over");
 #ifdef OTAA
     printk(" OTTA\n\n\n");
 #else
@@ -179,6 +187,7 @@ void main(void)
 	ret = lorawan_join(&join_cfg);
 	if (ret < 0) {
 		printk("lorawan_join_network failed: %d\n\n", ret);
+        mainled_rate = 100;             // Flash the led very rapidly to signal failure.
 		return;
 	}
 
@@ -193,7 +202,8 @@ void main(void)
 		}
 
 		if (ret < 0) {
-			return;
+			k_sleep(DELAY);
+			continue;
 		}
 
 		printk("Data sent!\n\n");
