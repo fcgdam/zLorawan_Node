@@ -20,6 +20,11 @@
 #include <drivers/uart.h>
 #include <drivers/gpio.h>
 
+
+// Check the board overlay file for the device definition
+BUILD_ASSERT(DT_NODE_HAS_COMPAT(DT_CHOSEN(zephyr_console), zephyr_cdc_acm_uart),
+         "Console device is not ACM CDC UART device");
+
 #define DEFAULT_RADIO_NODE DT_ALIAS(lora0)
 BUILD_ASSERT(DT_NODE_HAS_STATUS(DEFAULT_RADIO_NODE, okay),
 	     "No default LoRa radio specified in DT");
@@ -212,7 +217,7 @@ void main(void)
 }
 
 void console_init(void) {
-    struct device *dev = device_get_binding(CONFIG_UART_CONSOLE_ON_DEV_NAME);
+    struct device *dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
     uint32_t dtr = 0;
 
     if (usb_enable(NULL)) {
@@ -223,13 +228,6 @@ void console_init(void) {
     while (!dtr) {
         uart_line_ctrl_get(dev, UART_LINE_CTRL_DTR, &dtr);
         k_msleep(250);          // Let other tasks to run if no terminal is connected to USB
-    }
-
-    if (strlen(CONFIG_UART_CONSOLE_ON_DEV_NAME) != strlen("CDC_ACM_0") ||
-        strncmp(CONFIG_UART_CONSOLE_ON_DEV_NAME, "CDC_ACM_0",   strlen(CONFIG_UART_CONSOLE_ON_DEV_NAME))) {
-            printk("Error: Console device name is not USB ACM\n");
-
-        return;
     }
 
     while ( 1 ) {
