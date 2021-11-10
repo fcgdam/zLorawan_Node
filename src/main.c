@@ -269,7 +269,7 @@ void console_init(void) {
     /* Poll if the DTR flag was set, optional */
     while (!dtr) {
         uart_line_ctrl_get(dev, UART_LINE_CTRL_DTR, &dtr);
-        k_msleep(250);          // Let other tasks to run if no terminal is connected to USB
+        k_msleep(250);         // Let other tasks to run if no terminal is connected to USB
     }
 
     while ( 1 ) {
