@@ -7,6 +7,7 @@
  *            - Enabled OTAA
  *            - Enabled ADR
  *            - Enable packet send after duty cycle restrition
+ *            - Enable downlinks according to Zephyr example
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -29,6 +30,10 @@ BUILD_ASSERT(DT_NODE_HAS_COMPAT(DT_CHOSEN(zephyr_console), zephyr_cdc_acm_uart),
 BUILD_ASSERT(DT_NODE_HAS_STATUS(DEFAULT_RADIO_NODE, okay),
 	     "No default LoRa radio specified in DT");
 #define DEFAULT_RADIO DT_LABEL(DEFAULT_RADIO_NODE)
+
+#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
+#include <logging/log.h>
+LOG_MODULE_REGISTER(lorawan_node);
 
 /* Customize based on network configuration */
 // OTAA
@@ -125,6 +130,34 @@ void blink0(void) {
     blink(&led0, &mainled_rate, 0);
 }
 
+// Call back functions:
+// Downlink callback
+static void dl_callback(uint8_t port, bool data_pending, int16_t rssi, int8_t snr,  uint8_t len, const uint8_t *data)
+{   
+    printk("\nDownlink data received: \n");
+    for(int i=0; i < len; i++ )
+        printk("%02X ", data[i]);
+    
+    printk("\n");
+    printk("Data size: %d\n" , len );
+    printk("Data Port: %d\n" , port );
+    printk("RSSI:      %d\n" , (int16_t)rssi );
+    printk("SNR:       %d\n" , (int16_t)snr );
+    printk("Data pend: %d\n" , data_pending );
+
+    printk("\n\n");
+
+}
+
+// ADR change callback
+static void lorwan_datarate_changed(enum lorawan_datarate dr)
+{   
+    uint8_t unused, max_size;
+    
+    lorawan_get_payload_sizes(&unused, &max_size); 
+    LOG_INF("New Datarate: DR_%d, Max Payload %d", dr, max_size);
+}
+
 void main(void)
 {
 	const struct device *lora_dev;
@@ -164,6 +197,15 @@ void main(void)
 
     // Enable ADR
     lorawan_enable_adr( true );
+    
+    // Enable callbacks
+    struct lorawan_downlink_cb downlink_cb = {
+        .port = LW_RECV_PORT_ANY,
+        .cb = dl_callback
+    };
+
+    lorawan_register_downlink_callback( &downlink_cb );
+    lorawan_register_dr_changed_callback( lorwan_datarate_changed );
 
 #ifdef OTAA
 	join_cfg.mode = LORAWAN_CLASS_A;
