@@ -1,18 +1,4 @@
-﻿/*
- * Class A LoRaWAN sample application
- *
- * Copyright (c) 2020 Manivannan Sadhasivam <mani@kernel.org>
- *
- * Modified by Primal Cortex -> https://primalcortex.wordpress.com/2020/11/17/a-zephyr-rtos-based-ttn-lorawan-node/
- *            - Enabled OTAA
- *            - Enabled ADR
- *            - Enable packet send after duty cycle restrition
- *            - Enable downlinks according to Zephyr example
- *
- * SPDX-License-Identifier: Apache-2.0
- */
-
-#define   OTAA              // Enables OTAA. Comment out and enable line below for ABP.
+﻿#define   OTAA
 //#define ABP
 
 #include <lorawan/lorawan.h>
@@ -21,14 +7,11 @@
 #include <drivers/uart.h>
 #include <drivers/gpio.h>
 
-
-// Check the board overlay file for the device definition
 BUILD_ASSERT(DT_NODE_HAS_COMPAT(DT_CHOSEN(zephyr_console), zephyr_cdc_acm_uart),
          "Console device is not ACM CDC UART device");
 
 #define DEFAULT_RADIO_NODE DT_ALIAS(lora0)
-BUILD_ASSERT(DT_NODE_HAS_STATUS(DEFAULT_RADIO_NODE, okay),
-	     "No default LoRa radio specified in DT");
+BUILD_ASSERT(DT_NODE_HAS_STATUS(DEFAULT_RADIO_NODE, okay), "No default LoRa radio specified in DT");
 #define DEFAULT_RADIO DT_LABEL(DEFAULT_RADIO_NODE)
 
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
@@ -38,8 +21,8 @@ LOG_MODULE_REGISTER(lorawan_node);
 /* Customize based on network configuration */
 // OTAA
 #ifdef OTAA
-#define LORAWAN_DEV_EUI			{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }    // LSB Format!
-#define LORAWAN_JOIN_EUI		{ 0x70, 0xB3, 0xD5, 0x00, 0x00, 0x00, 0x00, 0x00 }
+#define LORAWAN_DEV_EUI			{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }    // MSB Format!
+#define LORAWAN_JOIN_EUI		{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }    // MSB Format!
 #define LORAWAN_APP_KEY         { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
 #endif
 
@@ -47,8 +30,8 @@ LOG_MODULE_REGISTER(lorawan_node);
 #ifdef ABP
 #define LORAWAN_DEV_ADDR        { 0x00, 0x00, 0x00, 0x00 }
 #define LORAWAN_NWK_SKEY        { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
-#define LORAWAN_APP_SKEY        { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xD0, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
-#define LORAWAN_APP_EUI         { 0x00, 0x00, 0x00, 0x00, 0xD0, 0x00, 0x00, 0x00 }
+#define LORAWAN_APP_SKEY        { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
+#define LORAWAN_APP_EUI         { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
 #endif
 
 #define DELAY K_MSEC(10000)
@@ -64,68 +47,45 @@ char data[] = {'h', 'e', 'l', 'l', 'o', 'w', 'o', 'r', 'l', 'd','f','r','o','z',
 #define LED0_NODE DT_ALIAS(led0)
 //#define LED1_NODE DT_ALIAS(led1)
 
-struct led {
-    const char *gpio_dev_name;
-    const char *gpio_pin_name;
-    unsigned int gpio_pin;
-    unsigned int gpio_flags;
-};
+static const struct gpio_dt_spec led0 = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
 
 uint32_t    mainled_rate = 150;     
 
-void blink(const struct led *led, uint32_t *sleep_ms, uint32_t id) {
-    struct device *gpio_dev;
-    int cnt = 0;
+void blink(const struct gpio_dt_spec *led, uint32_t *sleep_ms, uint32_t id) {
     int ret;
 
-    gpio_dev = device_get_binding(led->gpio_dev_name);
-    if (gpio_dev == NULL) {
-        printk("Error: didn't find %s device\n",
-        led->gpio_dev_name);
+    if (!device_is_ready(led->port)) {
         return;
     }
 
-    ret = gpio_pin_configure(gpio_dev, led->gpio_pin, led->gpio_flags);
-    if (ret != 0) {
-        printk("Error %d: failed to configure pin %d '%s'\n",
-        ret, led->gpio_pin, led->gpio_pin_name);
-    return;
+    ret = gpio_pin_configure_dt(led, GPIO_OUTPUT_ACTIVE);
+    if (ret < 0) {
+        return;
     }
 
     while (1) {
         // if the rate is zero we set the LED OFF
         if ( *sleep_ms == 0) {
-            gpio_pin_set(gpio_dev, led->gpio_pin, 0);
+            gpio_pin_set_dt(led, 0);
             // and we sleep some time to let the task run
             k_msleep(200);
         } else {
             if ( *sleep_ms == 1) {
                 // Led always on
-                gpio_pin_set(gpio_dev, led->gpio_pin, 1);
+                gpio_pin_set_dt(led, 1);
                 // and we sleep some time to let the task run
                 k_msleep(200);
             } else {
                 // Otherwise we just blink the led at the defined rate
-                gpio_pin_set(gpio_dev, led->gpio_pin, cnt % 2);
+                gpio_pin_toggle_dt(led);
                 //printk("Blink %d\n", id);
                 k_msleep( *sleep_ms);
-                cnt++;
             }
         }
     }
 }
 
 void blink0(void) {
-    const struct led led0 = {
-    #if DT_NODE_HAS_STATUS(LED0_NODE, okay)
-        .gpio_dev_name = DT_GPIO_LABEL(LED0_NODE, gpios),
-        .gpio_pin_name = DT_LABEL(LED0_NODE),
-        .gpio_pin = DT_GPIO_PIN(LED0_NODE, gpios),
-        .gpio_flags = GPIO_OUTPUT | DT_GPIO_FLAGS(LED0_NODE, gpios),
-    #else
-        #error "Unsupported board: led0 devicetree alias is not defined"
-    #endif
-    };
 
     blink(&led0, &mainled_rate, 0);
 }
@@ -157,6 +117,9 @@ static void lorwan_datarate_changed(enum lorawan_datarate dr)
     lorawan_get_payload_sizes(&unused, &max_size); 
     LOG_INF("New Datarate: DR_%d, Max Payload %d", dr, max_size);
 }
+
+/* Main program.
+*/
 
 void main(void)
 {
@@ -231,12 +194,18 @@ void main(void)
 #else
     printk(" ABP\n\n\n");
 #endif
-	ret = lorawan_join(&join_cfg);
-	if (ret < 0) {
-		printk("lorawan_join_network failed: %d\n\n", ret);
-        mainled_rate = 100;             // Flash the led very rapidly to signal failure.
-		return;
-	}
+
+    // Loop until we connect
+    do {
+    	ret = lorawan_join(&join_cfg);
+    	if (ret < 0) {
+	    	printk("lorawan_join_network failed: %d\n\n", ret);
+            mainled_rate = 100;             // Flash the led very rapidly to signal failure.
+            printk("Sleeping for 10s to try again to join network.\n\n");
+            k_sleep(K_MSEC(10000));
+            mainled_rate = 150;
+	    }
+    } while ( ret < 0 );
 
 	printk("Sending data...\n\n");
 
@@ -259,7 +228,7 @@ void main(void)
 }
 
 void console_init(void) {
-    struct device *dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+    const struct device *dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
     uint32_t dtr = 0;
 
     if (usb_enable(NULL)) {
@@ -269,11 +238,12 @@ void console_init(void) {
     /* Poll if the DTR flag was set, optional */
     while (!dtr) {
         uart_line_ctrl_get(dev, UART_LINE_CTRL_DTR, &dtr);
-        k_msleep(250);         // Let other tasks to run if no terminal is connected to USB
+        k_msleep(250);          // Let other tasks to run if no terminal is connected to USB
     }
 
     while ( 1 ) {
-        k_msleep(20000);
+        k_msleep(200000);
+        //printk("Ola mundo!\n");
     }
 }
 
@@ -286,4 +256,3 @@ K_THREAD_DEFINE(console_id, STACKSIZE, console_init, NULL, NULL, NULL, PRIORITY-
 
 // Lorawan handling task to join the TTN network
 //K_THREAD_DEFINE(lorawan_task_id, STACKSIZE, lorawan_task, NULL, NULL, NULL, PRIORITY, 0, 0);
-
