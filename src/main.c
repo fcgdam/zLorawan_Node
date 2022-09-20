@@ -6,6 +6,7 @@
 #include <usb/usb_device.h>
 #include <drivers/uart.h>
 #include <drivers/gpio.h>
+#include <zephyr/random/rand32.h>
 
 BUILD_ASSERT(DT_NODE_HAS_COMPAT(DT_CHOSEN(zephyr_console), zephyr_cdc_acm_uart),
          "Console device is not ACM CDC UART device");
@@ -21,8 +22,8 @@ LOG_MODULE_REGISTER(lorawan_node);
 /* Customize based on network configuration */
 // OTAA
 #ifdef OTAA
-#define LORAWAN_DEV_EUI			{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }    // MSB Format!
-#define LORAWAN_JOIN_EUI		{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }    // MSB Format!
+#define LORAWAN_DEV_EUI         { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }    // MSB Format!
+#define LORAWAN_JOIN_EUI        { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }    // MSB Format!
 #define LORAWAN_APP_KEY         { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
 #endif
 
@@ -170,12 +171,17 @@ void main(void)
     lorawan_register_downlink_callback( &downlink_cb );
     lorawan_register_dr_changed_callback( lorwan_datarate_changed );
 
+    uint32_t random = sys_rand32_get();
+
+    uint16_t dev_nonce = random & 0x0000FFFF;
+
 #ifdef OTAA
 	join_cfg.mode = LORAWAN_CLASS_A;
 	join_cfg.dev_eui = dev_eui;
 	join_cfg.otaa.join_eui = join_eui;
 	join_cfg.otaa.app_key = app_key;
 	join_cfg.otaa.nwk_key = app_key;
+    join_cfg.otaa.dev_nonce = dev_nonce;
 #endif
 
 #ifdef ABP
@@ -203,7 +209,7 @@ void main(void)
             mainled_rate = 100;             // Flash the led very rapidly to signal failure.
             printk("Sleeping for 10s to try again to join network.\n\n");
             k_sleep(K_MSEC(10000));
-            mainled_rate = 150;
+            mainled_rate = 0;
 	    }
     } while ( ret < 0 );
 
